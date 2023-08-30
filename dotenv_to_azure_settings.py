@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from argparse import ArgumentParser
 
 parser = ArgumentParser(
@@ -26,14 +27,14 @@ parser.add_argument(
 )
 
 
-def convert_dotenv_to_json(file_path: str, extras: list[str], output_file_path: str):
-    json_data = []
+def convert_dotenv_to_env_dict(file_path: str, extras: list[str]):
+    env_dict = {}
 
     if len(extras) != 0:
         for extra in extras:
             var, value = extra.split("=", 1)
-            json_data.append({"name": var, "value": value, "slotSetting": False})
-
+            env_dict[var] = value
+    
     with open(file_path, "r") as file:
         for line in file.readlines():
             line = line.strip()
@@ -48,10 +49,34 @@ def convert_dotenv_to_json(file_path: str, extras: list[str], output_file_path: 
                 # removing quotes to avoid weird strings
                 if value[0] == '"':
                     value = value[1:-1]
+                
+                env_dict[var] = value
+    
+    return env_dict
 
-                json_data.append(
-                    {"name": var, "value": str(value), "slotSetting": False}
-                )
+
+def format_variables(env_dict: dict[str, str]):
+    for key in env_dict:
+        if "${" in env_dict[key]:
+            key_list = re.findall(r'\$\{(?P<keys>[A-Z_]+)\}', env_dict[key])
+            env_dict[key] = env_dict[key].replace("${", "{")
+            format_dict = { i: env_dict[i] for i in key_list }
+            value = env_dict[key].format(**format_dict)
+            env_dict[key] = value
+    return env_dict
+
+
+def convert_dotenv_to_json(file_path: str, extras: list[str], output_file_path: str):
+    json_data = []
+    env_dict = convert_dotenv_to_env_dict(file_path, extras)
+    env_dict = format_variables(env_dict)
+
+    for key, value in env_dict.items():
+        json_data.append({
+            "name": key,
+            "value": value,
+            "slotSetting": False
+        })
 
     if output_file_path is None:
         output_file_path = os.path.join(os.getcwd(), "azure_settings.json")
