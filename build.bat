@@ -1,0 +1,1 @@
+pyinstaller --name=env2azure --onefile dotenv_to_azure_settings.py
